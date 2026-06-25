@@ -69,6 +69,15 @@ if [ $exit_code -ne 1 ]; then
   exit 1
 fi
 
+set +e
+aibolit recommend --filenames test-files/Sample.java --min-score=100 > /dev/null
+exit_code=$?
+set -e
+if [ $exit_code -ne 0 ]; then
+  echo "ERROR: aibolit recommend with --min-score failed with exit code $exit_code"
+  exit 1
+fi
+
 echo "Testing error handling..."
 set +e
 aibolit recommend --filenames non-existent.java > /dev/null 2>&1

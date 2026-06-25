@@ -12,7 +12,7 @@ from aibolit.config import Config
 
 from aibolit.__main__ import list_dir, calculate_patterns_and_metrics, \
     create_xml_tree, create_text, format_converter_for_pattern, find_start_and_end_lines, \
-    find_annotation_by_node_type, add_pattern_if_ignored
+    find_annotation_by_node_type, add_pattern_if_ignored, get_exit_code
 
 
 class TestRecommendPipeline(TestCase):
@@ -158,6 +158,22 @@ class TestRecommendPipeline(TestCase):
         mock_input = self.__create_mock_input()
         mock_cmd = self.__create_mock_cmd()
         create_xml_tree(mock_input, full_report=True, cmd=mock_cmd, exit_code=2)
+
+    def test_get_exit_code_with_default_score_threshold(self):
+        mock_input = self.__create_mock_input()
+        self.assertEqual(get_exit_code(mock_input), 1)
+
+    def test_get_exit_code_with_min_score(self):
+        mock_input = self.__create_mock_input()
+        self.assertEqual(get_exit_code(mock_input, min_score=9.52), 0)
+        self.assertEqual(get_exit_code(mock_input, min_score=9.51), 1)
+
+    def test_get_exit_code_with_partial_analysis_errors(self):
+        mock_input = [
+            {'filename': 'Perfect.java', 'results': [], 'exception': None, 'ncss': 1},
+            {'filename': 'Broken.java', 'results': [], 'exception': Exception('boom'), 'ncss': 0},
+        ]
+        self.assertEqual(get_exit_code(mock_input), 1)
 
     def test_text_format(self):
         mock_input = self.__create_mock_input()

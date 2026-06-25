@@ -8,6 +8,7 @@
 import argparse
 import concurrent.futures
 import json
+import math
 import multiprocessing
 import operator
 import os
@@ -614,7 +615,34 @@ def create_xml_tree(results, full_report, cmd, exit_code):
     return top
 
 
-def get_exit_code(results):
+def _flatten_pattern_results(results_for_file):
+    """Flatten nested component results for a single file."""
+    if results_for_file and all(isinstance(item, list) for item in results_for_file):
+        return flatten(results_for_file)
+    return results_for_file
+
+
+def _get_score_for_file(result_for_file):
+    """Calculate the total score for a single analyzed file."""
+    patterns = _flatten_pattern_results(result_for_file.get('results') or [])
+    return sum(
+        pattern.get('importance', 0)
+        for pattern in patterns
+        if pattern.get('pattern_code')
+    )
+
+
+def _get_project_score(results):
+    """Calculate the average score across files with recommendations."""
+    file_scores = [
+        _get_score_for_file(result_for_file)
+        for result_for_file in results
+        if result_for_file.get('results') and not result_for_file.get('exception')
+    ]
+    return float(np.mean(file_scores)) if file_scores else 0.0
+
+
+def get_exit_code(results, min_score=0.0):
     """
     Analyzed recommendation results and generate exit_code for pipeline
     """
@@ -624,11 +652,11 @@ def get_exit_code(results):
     perfect_code_number = 0
     errors_strings = []
     for result_for_file in results:
-        results = result_for_file.get('results')
+        file_results = result_for_file.get('results')
         ex = result_for_file.get('exception')
-        if not results and not ex:
+        if not file_results and not ex:
             perfect_code_number += 1
-        elif not results and ex:
+        elif not file_results and ex:
             if not isinstance(ex, JavaSyntaxError):
                 errors_strings.append(ex)
                 errors_number += 1
@@ -642,8 +670,13 @@ def get_exit_code(results):
     elif perfect_code_number == files_analyzed:
         # everything is good
         exit_code = 0
+    elif any(result_for_file.get('results') for result_for_file in results):
+        project_score = _get_project_score(results)
+        exit_code = int(
+            project_score > min_score and not math.isclose(project_score, min_score)
+        )
     else:
-        # we have some recommendation
+        # we have some errors, but not for every file
         exit_code = 1
 
     return exit_code
@@ -715,7 +748,7 @@ def recommend():
     parser = argparse.ArgumentParser(
         description='Get recommendations for Java code',
         usage='aibolit recommend < --folder | --filenames > [--model] '
-              '[--threshold] [--full] [--format]')
+              '[--min-score] [--threshold] [--full] [--format]')
 
     group_exclusive = parser.add_mutually_exclusive_group(required=True)
 
@@ -747,6 +780,12 @@ def recommend():
         default='compact',
         help='compact (by default), long or xml. Usage: --format=xml'
     )
+    parser.add_argument(
+        '--min-score',
+        type=float,
+        default=0.0,
+        help='Maximum allowed average project score before exiting with status 1.'
+    )
 
     parser.add_argument(
         '--suppress',
@@ -776,7 +815,7 @@ def recommend():
         files = [str(Path(x).absolute()) for x in all_files if str(x) not in files_to_exclude]
 
     results = list(run_thread(files, args))
-    exit_code = get_exit_code(results)
+    exit_code = get_exit_code(results, args.min_score)
 
     if args.format:
         if args.format == 'xml':

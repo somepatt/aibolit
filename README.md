@@ -48,9 +48,10 @@ You can see the list of all patterns in
 [Patterns.md](https://github.com/cqfn/aibolit/blob/master/PATTERNS.md).
 The output of recommendation will be redirected to the stdout.
 If the program has the `0` exit code, it means that all analyzed files do
-not have any issues.
+not have any issues, or that the average project score does not exceed
+`--min-score`.
 If the program has the `1` exit code, it means that at least 1 analyzed file
-has an issue.
+has an issue and the average project score exceeds `--min-score`.
 If the program has the `2` exit code, it means that program crash occurred.
 
 You can suppress certain patterns (comma separated value) and they will be
@@ -66,6 +67,13 @@ is `--format=compact`.
 
 ```bash
 aibolit recommend --folder src/java --format=compact --full
+```
+
+You can also allow a small amount of issues and fail only when the average
+project score gets above a chosen threshold:
+
+```bash
+aibolit recommend --folder src/java --min-score=5
 ```
 
 It will output sorted patterns by importance in descending order and grouped
